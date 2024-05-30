@@ -1,0 +1,9 @@
+sqlalchemy
+fastapi
+psycopg2
+python-dotenv
+alembic
+uvicorn[standart]
+jose
+passlib
+pytest
