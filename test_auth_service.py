@@ -57,3 +57,11 @@ def test_private_routers():
     # Пользователь не авторизован
     response = client.get("/users/me")
     assert response.status_code == 401
+
+    # Удаляем тестового пользователя
+    response = client.delete(
+        "/users/delete",
+        headers=auth_response.headers,
+        cookies=auth_response.cookies,
+    )
+    assert response.status_code == 200

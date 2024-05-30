@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from starlette.status import HTTP_200_OK, HTTP_400_BAD_REQUEST, HTTP_408_REQUEST_TIMEOUT
 
-from middleware.Token import CheckAuthMiddleware
+from middleware.token_middleware import CheckAuthMiddleware
 from model.user_schema import UserLogin, UserUpdate, UserBase
 from model.settings import get_db
 from security import ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
@@ -18,24 +18,24 @@ from services.user_services import (
     create_user,
     update_user,
     get_data_users,
-    get_current_user,
+    get_current_user, delete_user,
 )
 
-user_public_router = APIRouter(tags=["UserPublicRoutes"])
+user_public_router = APIRouter(tags=["UserPublicRouters"])
 user_private_router = APIRouter(
-    tags=["UserPrivate"], dependencies=[Depends(CheckAuthMiddleware)]
+    tags=["UserPrivateRouters"], dependencies=[Depends(CheckAuthMiddleware)]
 )
 
 
 @user_public_router.post("/logup")
-def registration(user_data: UserLogin, db: Session = Depends(get_db)):
+def registration_router(user_data: UserLogin, db: Session = Depends(get_db)):
     """Регистрирует нового пользователя"""
     create_user(db=db, user_data=user_data)
     return HTTP_200_OK
 
 
 @user_public_router.post("/refresh")
-def refresh(request: Request):
+def refresh_router(request: Request):
     """Получает существующий рефреш токен, при условии корректного рефреш токена возвращает access_token"""
     refresh_token = request.cookies.get("refreshToken")
     if refresh_token is None:
@@ -55,7 +55,7 @@ def refresh(request: Request):
 
 
 @user_public_router.post("/login")
-def authorization(
+def authorization_router(
     user_data: UserLogin,
     response: Response,
     db: Session = Depends(get_db),
@@ -81,31 +81,33 @@ def authorization(
         secure=False,
     )
     response.headers["Authorization"] = access_token
-    return {"user": user, "accessToken": access_token, "refreshToken": refresh_token}
+    return {"user": user, "accessToken": access_token}
 
 
 @user_public_router.post("/logout")
-def logout(response: Response):
+def logout_router(response: Response):
     """Удаляет токен и куки пользователя (Выход из аккаунта)"""
     response.delete_cookie("refreshToken")
     return HTTP_200_OK
 
 
 @user_public_router.get("/")
-def get_users_data(db: Session = Depends(get_db)) -> List[UserBase]:
+def get_users_data_router(db: Session = Depends(get_db)) -> List[UserBase]:
     data = get_data_users(db=db)
     return data
 
 
 @user_private_router.post("/me")
-def update_user_data(
+def update_user_data_router(
     user_data: UserUpdate,
     request: Request,
     response: Response,
     db: Session = Depends(get_db),
 ):
     """Обновляет данные конкретного пользователя"""
-    user_updated = update_user(request=request, db=db, user_data=user_data)
+    refresh_token = request.cookies.get("refreshToken")
+    user = get_current_user(token=refresh_token, db=db)
+    user_updated = update_user(old_user_data=user, db=db, new_user_data=user_data)
     response.delete_cookie("refreshToken")
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     refresh_token_expires = timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
@@ -123,7 +125,7 @@ def update_user_data(
         samesite=None,
         secure=False,
     )
-    response.headers["authorization"] = access_token
+    response.headers["Authorization"] = access_token
 
     return {
         "user": {
@@ -135,9 +137,16 @@ def update_user_data(
 
 
 @user_private_router.get("/me")
-def get_data_current_user(
+def get_data_user_router(
     request: Request, db: Session = Depends(get_db)
 ) -> UserUpdate:
     refresh_token = request.cookies.get("refreshToken")
     user = get_current_user(token=refresh_token, db=db)
     return UserUpdate(user_name=user.user_name, email=user.email)
+
+
+@user_private_router.delete('/delete')
+def delete_user_router(request: Request, db: Session = Depends(get_db)):
+    refresh_token = request.cookies.get("refreshToken")
+    user = get_current_user(token=refresh_token, db=db)
+    delete_user(user_data=user, db=db)

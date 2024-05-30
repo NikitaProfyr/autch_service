@@ -9,7 +9,7 @@ services:
     - ./server:/server
     command: >
       bash -c
-      "pip
+      "
       alembic upgrade head
       &&
       pytest
@@ -28,7 +28,6 @@ services:
       - .env
     depends_on:
       - db
-      - redis
   db:
     image: postgres:16
     environment:

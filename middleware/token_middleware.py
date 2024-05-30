@@ -11,7 +11,7 @@ def CheckAuthMiddleware(
     request: Request, response: Response, db: Session = Depends(get_db)
 ):
     """Middleware проверяет авторизован ли пользователь"""
-    authorization_header = request.headers.get("authorization")
+    authorization_header = request.headers.get("Authorization")
     print(authorization_header)
     if not authorization_header:
         raise HTTPException(

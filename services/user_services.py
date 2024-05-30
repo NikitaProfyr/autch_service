@@ -45,6 +45,7 @@ def create_user(db: Session, user_data: UserLogin):
 
 
 def authenticated(user_data: UserLogin, db: Session = Depends(get_db)) -> User:
+    """ Функция производит аутентификацию пользователя"""
     user = get_user_by_name(db=db, user_data=user_data)
     if not user:
         raise HTTPException(
@@ -73,7 +74,7 @@ def create_token(data: dict, expires_delta: timedelta | None = None) -> str:
     return encoded_jwt
 
 
-def validate_refresh_token(token: str):
+def validate_refresh_token(token: str) -> dict | None:
     """Функция проводит валидацию refresh токена"""
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -86,6 +87,7 @@ def get_current_user(
     token: Annotated[str, Depends(oauth2Scheme)],
     db: Session = Annotated[str, Depends(get_db)],
 ) -> User:
+    """Функция возвращает пользователя из данных JWT токена"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Не удалось проверить учетные данные",
@@ -105,23 +107,22 @@ def get_current_user(
     return user
 
 
-def update_user(request: Request, db: Session, user_data: UserUpdate):
-    refresh_token = request.cookies.get("refreshToken")
-    user_update = get_current_user(token=refresh_token, db=db)
+def update_user(old_user_data: User, db: Session, new_user_data: UserUpdate):
+    """Функция обновляет данные пользователя"""
 
     try:
         query = (
             update(User)
-            .where(and_(User.user_name == user_update.user_name))
+            .where(and_(User.user_name == old_user_data.user_name))
             .values(
-                user_name=user_data.user_name,
-                email=user_data.email,
+                user_name=new_user_data.user_name,
+                email=new_user_data.email,
             )
         )
         db.execute(query)
         db.commit()
         updated_user = db.execute(
-            select(User).where(or_(User.user_name == user_data.user_name))
+            select(User).where(or_(User.user_name == new_user_data.user_name))
         ).scalar()
 
         return updated_user
@@ -156,7 +157,7 @@ def get_data_users(db: Session) -> List[UserBase]:
     return data
 
 
-def delete_user(user_data: UserLogin, db: Session = Depends(get_db)):
+def delete_user(user_data: User, db: Session = Depends(get_db)):
     try:
         db.execute(delete(User).where(and_(User.user_name == user_data.user_name)))
         db.commit()
